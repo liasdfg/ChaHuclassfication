@@ -35,6 +35,19 @@ class ChaHuDataSet(Dataset):
         label = sample[self.label_class].strip()
         image_np = np.array(image)
         mask_np = np.array(mask) / 255.0
+        # 裁剪原图实现
+        nonzero = np.argwhere(mask_np > 0)
+        if len(nonzero) > 0:
+            ymin, xmin = nonzero.min(axis=0)
+            ymax, xmax = nonzero.max(axis=0)
+            h, w = mask_np.shape
+            ymin = max(0, ymin - 15)
+            xmin = max(0, xmin - 15)
+            ymax = min(h, ymax + 15)
+            xmax = min(w, xmax + 15)
+            image_np = image_np[ymin:ymax, xmin:xmax]
+            mask_np = mask_np[ymin:ymax, xmin:xmax]
+
         if self.transform:
             transformed = self.transform(image=image_np,mask=mask_np)
             image_np = transformed['image']
@@ -52,12 +65,17 @@ def unify_label(train_data_set,val_data_set,label_class="geometric shape type"):
     train_label = set(train_data_set[label_class])
     val_label = set(val_data_set[label_class])
     common_label = train_label & val_label
-    def replace_label(sample):
+    def replace_label(sample,change_counter):
         if sample[label_class] not in common_label:
             sample[label_class] = "其他"
+            change_counter[0] += 1
         return sample
-    train_data_set = train_data_set.map(replace_label)
-    val_data_set = val_data_set.map(replace_label)
+    train_count = [0]
+    val_count = [0]
+    train_data_set = train_data_set.map(lambda x: replace_label(x,train_count))
+    val_data_set = val_data_set.map(lambda x: replace_label(x, val_count))
+    print(f"训练集中被更改为'其他'的样本数: {train_count[0]}")
+    print(f"验证集中被更改为'其他'的样本数: {val_count[0]}")
     return train_data_set,val_data_set
 
 def get_model(model_name,class_num): #获取所需模型
@@ -168,9 +186,9 @@ def validate_model(model,val_dataloader,criterion,device):
 if __name__ == "__main__":
     # albumentations 不对mask产生颜色转变
     train_transform = A.Compose([
-        A.Resize(height=224, width=224),
+        A.LongestMaxSize(max_size=224),
+        A.PadIfNeeded(min_height=224, min_width=224, border_mode=0, value=(0, 0, 0), mask_value=0),
         A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5),
         A.Perspective(scale=(0.05, 0.1), p=0.4),
         A.RandomBrightnessContrast(p=0.2),
         A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2, p=0.5),
@@ -178,10 +196,11 @@ if __name__ == "__main__":
     ])
     val_transform = A.Compose(
         [
-            A.Resize(height=224, width=224)
+            A.LongestMaxSize(max_size=224),
+            A.PadIfNeeded(min_height=224, min_width=224, border_mode=0, value=(0, 0, 0), mask_value=0)
         ]
     )
-    class_type = "natural shape type"
+    class_type = "natural shape type"  #修改训练的标签
     pot_cn_dataset = load_dataset("./ChaHu", split="CN")
     train_test_data = pot_cn_dataset.train_test_split(test_size=0.2, seed=18)
     train_dataset, val_dataset = unify_label(train_test_data['train'],train_test_data['test'],class_type)
@@ -192,6 +211,7 @@ if __name__ == "__main__":
 
     train_data = ChaHuDataSet(train_dataset,class_type,train_transform)
     val_data = ChaHuDataSet(val_dataset,class_type,val_transform)
+
     if train_data.class_to_idx != val_data.class_to_idx:
         sys.exit("标签字典错误")
     label_map = train_data.idx_to_class
@@ -199,7 +219,7 @@ if __name__ == "__main__":
     print(map_path)
     with open(map_path, 'w') as f:
         json.dump(label_map, f)
-    model = get_model("resnet34",len(train_data.classes_list))
+    model = get_model("resnet34",len(train_data.classes_list)) #更换模型
     model = model.to(device)
     batch_size = 100
     num_worker = get_num_workers()
