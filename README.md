@@ -2,15 +2,13 @@
 
 ## 项目简介
 
-本项目是一个用于紫砂壶图像分类深度学习项目。该项目包含：
-- **大规模紫砂壶图像数据集**：包含9000张紫砂壶图像及对应的mask遮罩
-- **多任务学习模型**：基于ResNet-34，结合 **SE注意力模块** 和 **GeM池化**，实现多个不同角度（几何形状、自然形状、花卉类型、把手类型）的紫砂壶分类
+本项目是一个用于紫砂壶图像分类深度学习项目。该项目包含**多任务学习模型**：基于**ResNet-34**，结合 **SE注意力模块** 和 **GeM池化**，实现多个不同角度（几何形状、自然形状、花卉类型、把手类型）的紫砂壶分类
 
 ## 数据集说明
 
 - 数据集托管于 Hugging Face Datasets：[AGI-FBHC/ChaHu](https://huggingface.co/datasets/AGI-FBHC/ChaHu)
 
-- 数据集准备工作：将下载的数据集cn-00000-of-00001.parquet，CN-00000-of-00003.parquet，CN-00001-of-00003.parquet，CN-00002-of-00003.parquet三个文件复制到ChaHU下。
+- 数据集准备工作：将下载的数据集cn-00000-of-00001.parquet，CN-00000-of-00003.parquet，CN-00001-of-00003.parquet，CN-00002-of-00003.parquet三个文件复制到ChaHu目录下。
 
 
 ## 数据集结构
@@ -61,7 +59,7 @@ ChaHu/
 
 ### 2. SE注意力模块（Squeeze-and-Excitation）
 * 考虑到紫砂壶类间差异微小，主要靠轮廓比例、口盖线条、流把弧度区分，且紫砂泥料质感、窑变色泽、包浆光泽等细节信息分散在不同通道，SE 模块能增强重要通道权重，提高判别能力。
-* 在 `layer2` 和 `layer3` 后分别加入 SE 模块（`SELayer`），用于自动学习通道权重，突出纹理、颜色和轮廓等重要特征，压制背景噪声、反光或划痕等无用特征
+* 在 `layer2` 和 `layer3` 后分别加入 SE 模块（`SELayer`），用于自动学习通道权重，突出纹理、颜色和轮廓等重要特征，压制背景噪声、反光或划痕等无用特征。
 * 轻量化设计，直接嵌入 ResNet34，不改变主干结构，避免增加过多计算量。
 
 ### 3. 全局特征聚合（GeM池化）
@@ -85,8 +83,8 @@ ChaHu/
 
 1. **SE模块增强判别力**：自动放大纹理、色泽、轮廓等重要通道，抑制无效信息。
 2. **GeM池化提高特征聚合能力**：灵活调整空间权重，突出紫砂壶关键特征。
-3. **多任务支持**：共享特征提取层，同时预测多个任务，提升训练效率和泛化能力。
-4. **轻量化与高效性兼顾**：在保持 ResNet34 主干的同时加入轻量模块，避免过拟合。
+3. **多任务支持**：共享特征提取层，可按需求灵活预测多个任务，提升训练效率和泛化能力。
+4. **轻量化与高效性兼顾**：在保持 ResNet34 主干的同时加入轻量模块，兼顾轻量化与高效性。
 5. **嵌入层稳定训练**：BatchNorm + ReLU + Dropout 提高训练稳定性，降低小数据集过拟合风险。
 
 ## 训练步骤
@@ -267,7 +265,7 @@ class GeM(nn.Module):
 
 为充分利用不同分类任务之间的相关性，本项目采用 **共享特征提取 + 独立分类头** 的多任务学习结构。
 
-当前实现两个分类任务：
+本项目使用的两个分类任务：
 
 - geometric shape type（几何形状）
 - natural shape type（自然形状）
@@ -322,7 +320,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY) # AdamW优化器
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS) # 余弦退火
 ```
-## 大模型实现代码说明
+## 借助大模型实现的代码说明
 ### picture_mask_test.py
 原图裁剪代码
 ```python
