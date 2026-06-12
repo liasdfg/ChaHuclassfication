@@ -1,16 +1,16 @@
-<img width="1200" height="600" alt="picture_pred_geometric shape type_20260612_102912" src="https://github.com/user-attachments/assets/abfa28de-49d3-4b2d-a77c-97344bd5c4bf" /># ChaHuclassfication
+# ChaHuclassfication
 
 ## 项目简介
 
 本项目是一个用于紫砂壶图像分类深度学习项目。该项目包含：
 - **大规模紫砂壶图像数据集**：包含9000张紫砂壶图像及对应的mask遮罩
-- **多任务学习模型**：基于ResNet-34，，实现四个不同角度（几何形状、自然形状、花卉类型、把手类型）的紫砂壶几何类型分类
+- **多任务学习模型**：基于ResNet-34，结合 **SE注意力模块** 和 **GeM池化**，实现多个不同角度（几何形状、自然形状、花卉类型、把手类型）的紫砂壶分类
 
 ## 数据集说明
 
 - 数据集托管于 Hugging Face Datasets：[AGI-FBHC/ChaHu](https://huggingface.co/datasets/AGI-FBHC/ChaHu)
 
-- 数据集准备工作：将下载的数据集CN-00000-of-00003.parquet，CN-00001-of-00003.parquet，CN-00002-of-00003.parquet三个文件复制到该目录下。
+- 数据集准备工作：将下载的数据集cn-00000-of-00001.parquet，CN-00000-of-00003.parquet，CN-00001-of-00003.parquet，CN-00002-of-00003.parquet三个文件复制到ChaHU下。
 
 
 ## 数据集结构
@@ -20,13 +20,14 @@
 | `id` | string | 图像唯一标识符（如 JN000001） |
 | `image` | image | 紫砂壶图像 |
 | `mask` | image | 图像遮罩，用于提取壶体区域 |
+| `caption` | string | 描述文字 |
+| `time` | string | 时间信息 |
 | `geometric shape type` | string | 几何形状类型 |
 | `natural shape type` | string | 自然形状类型 |
 | `flower type` | string | 花卉类型 |
 | `handle type` | string | 把手类型 |
 | `innovative` | string | 是否创新 |
-| `caption` | string | 描述文字 |
-| `time` | string | 时间信息 |
+
 
 ## **项目结构**
 
@@ -80,7 +81,7 @@ ChaHu/
 * 支持同时预测多个任务，如几何形状类型和自然形状类型。
 
 
-### 6. 模型设计亮点
+### 6. 模型创新点
 
 1. **SE模块增强判别力**：自动放大纹理、色泽、轮廓等重要通道，抑制无效信息。
 2. **GeM池化提高特征聚合能力**：灵活调整空间权重，突出紫砂壶关键特征。
@@ -90,7 +91,7 @@ ChaHu/
 
 ## 训练步骤
 
-1. 运行 `process.py`，通过掩码提取紫砂壶图像有效区域，处理后在 `ChaHu` 目录下生成三个新文件：`cn-00000-of-00001-processed.parquet`、`CN-00000-of-00003-processed.parquet`、`CN-00001-of-00003-processed.parquet`、`CN-00002-of-00003-processed.parquet`。
+1. 运行 `process.py`，通过掩码提取紫砂壶图像有效区域，处理后在 `ChaHu` 目录下生成四个新文件：`cn-00000-of-00001-processed.parquet`、`CN-00000-of-00003-processed.parquet`、`CN-00001-of-00003-processed.parquet`、`CN-00002-of-00003-processed.parquet`。
 
    * 提取紫砂壶有效区域效果图如下所示
 
@@ -127,7 +128,7 @@ ChaHu/
 | TEST_SIZE     | 0.1   | 测试集比例     |
 
 
-​	3. 运行test_model.py，测试模型效果。得到紫砂壶4个分类头的准确率，输出分类概率柱状图。
+​	3. 运行model_picture_test.py，测试模型效果，输出分类概率柱状图。
 
 ### 模型输出
 
@@ -215,6 +216,81 @@ def dynamic_task_weight(val_accs, base_weights=[0.25, 0.25, 0.25, 0.25]):
                 acc_weights = dynamic_task_weight(current_val_accs)
                 task_weights = [0.9 * a + 0.1 * s for a, s in zip(task_weights, acc_weights)]
 ```
+### SE注意力机制
+
+为增强模型对紫砂壶细粒度特征的感知能力，本项目在 ResNet34 的中深层特征提取阶段引入 **SE（Squeeze-and-Excitation）注意力模块**。
+可实现强化关键纹理与轮廓特征、抑制背景和噪声信息、提高模型判别能力。核心代码如下：
+
+```python
+class SELayer(nn.Module):
+    def __init__(self, channel, reduction=16):
+        super(SELayer, self).__init__()
+
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+
+        self.fc = nn.Sequential(
+            nn.Linear(channel, channel // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channel // reduction, channel, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+
+        return x * y.expand_as(x)
+```
+
+### GeM池化
+
+传统 ResNet 使用全局平均池化（Global Average Pooling）进行特征聚合，但平均池化会平等对待所有空间位置的信息。
+因此本项目采用 **GeM池化（Generalized Mean Pooling）**，GeM通过引入可学习参数 p，能够自动学习最适合当前任务的特征聚合方式。核心代码如下：
+
+```python
+class GeM(nn.Module):
+    def __init__(self, p=3.0, eps=1e-6):
+        super().__init__()
+
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+
+    def forward(self, x):
+        return F.avg_pool2d(
+            x.clamp(min=self.eps).pow(self.p),
+            kernel_size=(x.size(-2), x.size(-1))
+        ).pow(1.0 / self.p)
+```
+### 多任务分类结构
+
+为充分利用不同分类任务之间的相关性，本项目采用 **共享特征提取 + 独立分类头** 的多任务学习结构。
+
+当前实现两个分类任务：
+
+- geometric shape type（几何形状）
+- natural shape type（自然形状）
+
+模型共享同一个 ResNet34 主干网络，最终通过多个独立分类头完成预测。其可以提高特征利用率，降低模型参数量，增强模型泛化能力，促进不同任务之间的信息共享。核心代码如下：
+
+```python
+self.heads = nn.ModuleDict()
+
+for type_name, num in type_len_list.items():
+    self.heads[type_name] = nn.Linear(512, num)
+```
+
+```python
+outputs = []
+
+for type_name in self.type_len_list.keys():
+    outputs.append(
+        self.heads[type_name](x)
+    )
+
+return tuple(outputs)
+```
 
 ### 数据增强
 
@@ -246,9 +322,74 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY) # AdamW优化器
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS) # 余弦退火
 ```
+## 大模型实现代码说明
+### picture_mask_test.py
+原图裁剪代码
+```python
+# 裁剪原图,增加细节
+    nonzero = np.argwhere(mask_np > 0)
+    if len(nonzero) > 0:
+        y_min, x_min = nonzero.min(axis=0)
+        y_max, x_max = nonzero.max(axis=0)
+        h, w = mask_np.shape
+        y_min = max(0, y_min - 15)
+        x_min = max(0, x_min - 15)
+        y_max = min(h, y_max + 15)
+        x_max = min(w, x_max + 15)
+        image_np = image_np[y_min:y_max, x_min:x_max]
+        mask_np = mask_np[y_min:y_max, x_min:x_max]
+```
+### process.py
+原图裁剪代码
+```python
+nonzero = np.argwhere(mask_np > 0)
+    if len(nonzero) > 0:
+        y_min, x_min = nonzero.min(axis=0)
+        y_max, x_max = nonzero.max(axis=0)
+        h, w = mask_np.shape
+        y_min = max(0, y_min - 15)
+        x_min = max(0, x_min - 15)
+        y_max = min(h, y_max + 15)
+        x_max = min(w, x_max + 15)
+        image_np = image_np[y_min:y_max, x_min:x_max]
+        mask_np = mask_np[y_min:y_max, x_min:x_max]
+```
+### main.py
+GeM
+```python
+class GeM(nn.Module):
+    def __init__(self, p=3.0, eps=1e-6):
+        super().__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+    def forward(self, x):
+        return F.avg_pool2d(x.clamp(min=self.eps).pow(self.p),
+                            kernel_size=(x.size(-2), x.size(-1))).pow(1.0 / self.p)
 
+```
+损失函数构建
 
+```python
+    criterions = {}
+    for task in tasks:
+        if class_weights is not None and task in class_weights:
+            weight_tensor = torch.tensor(class_weights[task], dtype=torch.float32).to(DEVICE)
+            criterions[task] = nn.CrossEntropyLoss(weight=weight_tensor)
+        else:
+            criterions[task] = criterion
 
-
+```
+### model_picture_test.py
+GeM
+```python
+class GeM(nn.Module):
+    def __init__(self, p=3.0, eps=1e-6):
+        super().__init__()
+        self.p = nn.Parameter(torch.ones(1) * p)
+        self.eps = eps
+    def forward(self, x):
+        return F.avg_pool2d(x.clamp(min=self.eps).pow(self.p),
+                            kernel_size=(x.size(-2), x.size(-1))).pow(1.0 / self.p)
+```
 
 
