@@ -56,6 +56,7 @@ ChaHu/
 ## 模型结构
 
 本项目采用多任务图像分类网络，基于 **ResNet34**，结合 **SE注意力模块** 和 **GeM池化**，适用于紫砂壶精细分类任务。整体模型结构如下：
+<img width="1387" height="752" alt="tu" src="https://github.com/user-attachments/assets/4e3ebb6c-ee4c-4f25-a55a-ea98a89034fc" />
 
 ### 1. 基础网络
 * 使用 `torchvision.models.resnet34(pretrained=True)` 作为骨干网络。
