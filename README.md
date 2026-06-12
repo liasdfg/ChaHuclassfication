@@ -1,70 +1,251 @@
-# ChaHuclassfication
-尊敬的师兄您好：
+<img width="1200" height="600" alt="picture_pred_geometric shape type_20260612_102912" src="https://github.com/user-attachments/assets/abfa28de-49d3-4b2d-a77c-97344bd5c4bf" /># ChaHuclassfication
 
-目前茶壶几何形制与自然形制分类模型项目已经完成了基础的设计与实现，实现了模型训练与验证、模型保存以及测试图片可视化预测等功能，整体实现过程中主要参考了您发的 GitHub 链接中的那个ClayTeapots_Classify项目，并结合当前茶壶数据集特点进行了适当修改与优化。
+## 项目简介
 
-由于 GitHub 对单个文件上传大小存在限制，因此目前仓库中暂未上传完整数据集以及训练得到的模型权重文件，仅保留了核心代码部分。当前项目还存在很多不足，后续还需要进一步优化。
+本项目是一个用于紫砂壶图像分类深度学习项目。该项目包含：
+- **大规模紫砂壶图像数据集**：包含9000张紫砂壶图像及对应的mask遮罩
+- **多任务学习模型**：基于ResNet-34，，实现四个不同角度（几何形状、自然形状、花卉类型、把手类型）的紫砂壶几何类型分类
 
-下面简单介绍一下 classification.py 中各模块的功能及实现思路。
+## 数据集说明
 
-【ChaHuDataSet】
+- 数据集托管于 Hugging Face Datasets：[AGI-FBHC/ChaHu](https://huggingface.co/datasets/AGI-FBHC/ChaHu)
 
-ChaHuDataSet 是项目中的核心数据处理模块，负责将 HuggingFace Dataset 转换为 PyTorch Dataset。该模块首先自动构建类别名称与类别索引之间的映射关系，保证训练阶段与推理阶段标签的一致性，随后利用数据集中提供的 mask 提取目标区域，通过寻找 mask 非零区域的边界框对原图进行裁剪，使模型能够更多关注茶壶主体而非背景信息，在数据增强阶段采用 Albumentations 对图像和 mask 同步变换，避免目标区域与标注出现错位，最后利用 mask 去除背景并完成 ImageNet 标准化处理，输出符合深度学习模型输入要求的 Tensor 数据。
-
-【unify_label()】
-
-unify_label() 用于统一训练集与验证集的标签，函数首先统计两个数据集中的类别集合，然后计算两者共同拥有的类别，对于只存在于单侧数据集的类别统一映射为“其他”类别。这样既避免了训练阶段未出现类别导致严重错误的问题，又尽可能保留了原始样本数量，主要用于解决训练集与验证集类别分布不一致的问题。
-
-【get_model()】
-
-get_model() 根据输入的模型名称动态构建分类网络，目前支持 ResNet34、GoogLeNet 和 VGG19 三种主流卷积神经网络，并自动替换最后的分类层以适配当前任务的类别数量，同时加载 ImageNet 预训练权重实现迁移学习，使模型能够利用大规模数据中学到的特征，在当前样本规模较小的情况下获得更快的收敛速度和更好的分类性能。
-
-【find_batch_size()】
-
-find_batch_size() 用于根据硬件资源自动估计合适的 Batch Size。在 GPU 环境下，通过不断扩大 Batch Size 并执行测试，当发生显存溢出时返回上一次成功运行的 Batch Size，从而实现训练参数的自动调整，提高模型训练的自动化程度。
-
-【get_num_workers()】
-
-get_num_workers() 用于自动配置 DataLoader 的并行加载线程数。函数根据系统平台和 CPU 物理核心数量动态确定 worker 数量，在 Windows 平台适当限制线程数以保证运行稳定性，在 Linux 平台则尽可能利用多核优势提升数据读取效率。
-
-【train_model()】
-
-train_model() 实现单轮训练流程。函数首先将模型切换至训练模式，然后依次完成数据加载、前向传播、损失计算、反向传播以及参数更新。针对 GoogLeNet 的多输出结构，还额外计算辅助分类器损失并进行加权融合，以增强梯度传播效果。训练过程中实时统计 Loss 与 Accuracy，并利用 tqdm 动态显示训练进度，能够兼容不同网络结构的训练需求。
-
-【validate_model()】
-
-validate_model() 实现模型验证流程。函数首先将模型切换至评估模式，并关闭梯度计算以减少显存占用和计算开销，随后在验证集上执行前向传播，统计平均损失和分类准确率，用于评估模型的泛化能力和当前训练效果。
-
-【主程序（Main）】
-
-主程序负责构建完整的模型训练流水线。首先定义训练集和验证集的数据增强策略，然后加载 ChaHu 数据集并完成标签统一，构建数据集对象、分类模型以及 DataLoader，并配置损失函数、优化器和学习率调度器。训练过程中采用 Label Smoothing 提升模型泛化能力，同时利用 ReduceLROnPlateau 根据验证集损失动态调整学习率，并在验证准确率提升时自动保存最佳模型权重。
-
-目前自然形制分类模型已经完成初步训练，训练结果如下所示：
-
-<img width="1003" height="223" alt="1111" src="https://github.com/user-attachments/assets/17e7e552-173b-4e94-a541-b28247b16242" />
-
-下面是 visualization.py 中的函数功能及其实现。
-
-【get_model()】
-
-同 classification.py 中的 get_model()
-
-【process_image()】
-
-process_image() 是数据预处理函数，负责将原始图片转换为模型可接受的输入格式。函数首先利用 rembg 自动去除背景并生成目标 mask，然后通过计算 mask 的最小外接矩形完成目标裁剪，从而减少背景噪声对分类结果的影响，随后对图像和 mask 同步执行 Albumentations 预处理，并利用 mask 进一步抑制背景区域，最后完成 ImageNet 标准化、维度转换以及 Tensor 化操作，以保证推理阶段与训练阶段的数据处理流程一致。
-
-【主程序（Main）】
-
-主程序负责完成模型加载、图片预测和结果可视化，首先读取 classification.py 保存的标签映射文件和最佳模型权重，确保预测类别与训练阶段保持一致，随后遍历指定文件夹中的测试图片，通过 process_image() 完成预处理，并将数据输入训练好的分类模型进行前向传播，获得各类别的预测分数，并利用 Softmax 将模型输出转换为概率分布，计算预测类别及对应置信度。
-
-测试自然形制分类模型运行结果如下：
-
-<img width="835" height="413" alt="2222" src="https://github.com/user-attachments/assets/deb72776-4824-42ae-89a3-6b5c5dc19166" />
- 
-以上为目前项目的阶段性进展汇报，如有不妥之处还请师兄批评指正。
+- 数据集准备工作：将下载的数据集CN-00000-of-00003.parquet，CN-00001-of-00003.parquet，CN-00002-of-00003.parquet三个文件复制到该目录下。
 
 
+## 数据集结构
 
+| 字段 | 类型 | 描述 |
+|------|------|------|
+| `id` | string | 图像唯一标识符（如 JN000001） |
+| `image` | image | 紫砂壶图像 |
+| `mask` | image | 图像遮罩，用于提取壶体区域 |
+| `geometric shape type` | string | 几何形状类型 |
+| `natural shape type` | string | 自然形状类型 |
+| `flower type` | string | 花卉类型 |
+| `handle type` | string | 把手类型 |
+| `innovative` | string | 是否创新 |
+| `caption` | string | 描述文字 |
+| `time` | string | 时间信息 |
+
+## **项目结构**
+
+```bash
+ChaHu/
+├── data_split # 分隔训练集和测试集
+├── image      # readme使用到的一些图片
+├── image_save # 保存的训练结果
+├── model_save # 保存的模型 
+├── process/
+|	├── CN-00000-of-00003-new.parquet # process.py脚本通过mask处理后的文件
+|	├── CN-00001-of-00003-new.parquet
+|	├── CN-00002-of-00003-new.parquet
+├── vis_results   # 保存的测试结果
+├── main.py       # 主训练脚本（多任务SE-ResNet）
+├── process.py    # 数据预处理脚本
+├── README.md
+├── test_model.py #数据集测试脚本
+└── test_pic.py   #图像mask处理图示测试脚本
+```
+## 模型结构
+
+本项目采用多任务图像分类网络，基于 **ResNet34**，结合 **SE注意力模块** 和 **GeM池化**，适用于紫砂壶精细分类任务。整体模型结构如下：
+
+### 1. 基础网络
+* 使用 `torchvision.models.resnet34(pretrained=True)` 作为骨干网络。
+* ResNet 的卷积层划分：
+  - **layer1**：卷积 + BN + ReLU + MaxPool，提取浅层特征，主要负责边缘、纹理和基础形状信息提取，为后续特征聚合提供基础。
+  - **layer2**：ResNet 原 layer1-layer3，提取中层特征，其包含更多语义信息，能够捕捉紫砂壶的细微形态差异，如流把角度、口盖比例。
+  - **layer3**：ResNet 原 layer4，提取深层特征，其具备较大感受野，捕捉整体轮廓和器型信息，增强分类判别力。
+
+### 2. SE注意力模块（Squeeze-and-Excitation）
+* 考虑到紫砂壶类间差异微小，主要靠轮廓比例、口盖线条、流把弧度区分，且紫砂泥料质感、窑变色泽、包浆光泽等细节信息分散在不同通道，SE 模块能增强重要通道权重，提高判别能力。
+* 在 `layer2` 和 `layer3` 后分别加入 SE 模块（`SELayer`），用于自动学习通道权重，突出纹理、颜色和轮廓等重要特征，压制背景噪声、反光或划痕等无用特征
+* 轻量化设计，直接嵌入 ResNet34，不改变主干结构，避免增加过多计算量。
+
+### 3. 全局特征聚合（GeM池化）
+* 相比普通平均池化，GeM 可灵活调节不同空间位置的权重，紫砂壶特征分布不均（纹理、色泽、光泽），GeM 有助于捕捉这些重要区域，提升特征判别力。
+* 使用 **GeM 池化** (`GeM`) 将卷积特征聚合为全局向量。
+
+
+### 4. 特征嵌入层
+* 提取的全局特征可以通过嵌入层进一步增强判别力，并加上 BatchNorm 和 Dropout，提升训练稳定性和抗过拟合能力。
+* 全连接嵌入层： Linear → BatchNorm → ReLU → Dropout
+* 输出 512 维特征向量，用于多任务分类
+
+
+### 5. 多任务分类头
+* 紫砂壶分类任务包含多种属性（如几何形状与自然形态），多任务头共享特征提取层，节省训练资源，同时提升特征泛化能力。
+* 使用 `nn.ModuleDict` 为每个任务生成独立分类头，每个任务的输出维度对应类别数量。
+* 支持同时预测多个任务，如几何形状类型和自然形状类型。
+
+
+### 6. 模型设计亮点
+
+1. **SE模块增强判别力**：自动放大纹理、色泽、轮廓等重要通道，抑制无效信息。
+2. **GeM池化提高特征聚合能力**：灵活调整空间权重，突出紫砂壶关键特征。
+3. **多任务支持**：共享特征提取层，同时预测多个任务，提升训练效率和泛化能力。
+4. **轻量化与高效性兼顾**：在保持 ResNet34 主干的同时加入轻量模块，避免过拟合。
+5. **嵌入层稳定训练**：BatchNorm + ReLU + Dropout 提高训练稳定性，降低小数据集过拟合风险。
+
+## 训练步骤
+
+1. 运行 `process.py`，通过掩码提取紫砂壶图像有效区域，处理后在 `ChaHu` 目录下生成三个新文件：`cn-00000-of-00001-processed.parquet`、`CN-00000-of-00003-processed.parquet`、`CN-00001-of-00003-processed.parquet`、`CN-00002-of-00003-processed.parquet`。
+
+   * 提取紫砂壶有效区域效果图如下所示
+
+ <img width="3569" height="3648" alt="picture_mask" src="https://github.com/user-attachments/assets/02567355-73e0-4e29-a2c3-16acee711ab6" />
+
+
+2. 运行 `main.py`，完成**数据集划分、模型构建、多任务训练**全部流程：
+
+- 对处理后的数据集按照 **76% 训练集、14% 验证集、10% 测试集** 进行划分，以几何形状类型geometric shape为依据执行**分层抽样**，确保各子集类别分布与原始数据集保持一致；
+
+- 基于 **ResNet34**，结合 **SE注意力模块** 和 **GeM池化**，构建紫砂壶多任务分类模型，**可依据任务列表同时完成多个分类任务**：几何形状、自然形状、花卉类型、把手类型；
+
+  项目支持四个并行分类任务：
+
+| 任务         | 描述             | 示例类别                         |
+| ------------ | ---------------- | -------------------------------- |
+| **几何形状** | 壶的整体几何形态 | 石瓢壶，仿古壶，汉铎壶等         |
+| **自然形状** | 模仿自然形态     | 南瓜壶，竹节壶，莲子壶等         |
+| **花卉类型** | 花卉装饰图案     | 梅桩壶、供春壶、佛手壶等         |
+| **把手类型** | 壶把手的样式     | 三叉提梁壶，单式提梁壶，软提梁壶 |
+
+* 采用**动态任务权重策略**，根据各任务在验证集上的准确率自动调整训练优先级，实现多任务协同优化。
+
+### 训练参数配置（可在脚本中修改）：
+
+| 参数          | 默认值 | 描述           |
+| ------------- | ------ | -------------- |
+| IMAGE_SIZE    | 224    | 图像尺寸       |
+| BATCH_SIZE    | 64     | 批次大小       |
+| TASK_NAME_LIST | ['geometric shape type', 'natural shape type']   | 任务列表     |
+| LEARNING_RATE | 3e-4   | 学习率         |
+| WEIGHT_DECAY   | 1e-4    | 权重衰减       |
+| NUM_EPOCHS    | 50     | 训练轮数       |
+| TEST_SIZE     | 0.1   | 测试集比例     |
+
+
+​	3. 运行test_model.py，测试模型效果。得到紫砂壶4个分类头的准确率，输出分类概率柱状图。
+
+### 模型输出
+
+训练完成后会生成：
+
+- `model_save/model_best.pth` - 最佳验证准确率模型
+- `multitask_training_curves_20260611_230726.png` - 训练曲线图
+
+## 实验结果 
+
+* **训练效果如下所示**
+
+<img width="871" height="168" alt="运行截图1" src="https://github.com/user-attachments/assets/aa80afa1-6999-42e6-81d1-fe251ff757ab" />
+
+<img width="1600" height="800" alt="multitask_training_curves_20260611_230726" src="https://github.com/user-attachments/assets/532a9c35-e40c-4424-b536-a3d15344329b" />
+
+* **测试结果**
+
+  | 紫砂壶分类头 | 任务准确率 |
+  | ------------ | ---------- |
+  | **几何形状** | **0.6774**  |
+  | **自然形状** | **0.9077**  |
+
+  由于**几何形状**分类头包含紫砂壶壶型最多，包含有30多个类，且对于一些相似形状茶壶较难分辨，所以任务准确率最低，而**自然形状**只有8个左右，所以准确率高很多。
+
+* 下面是抽取的紫砂壶的各类别概率分布
+* **几何形状类：**
+
+
+
+<img width="1200" height="600" alt="picture_pred_geometric shape type_20260612_102912" src="https://github.com/user-attachments/assets/4570fd26-fadc-41d3-b8d1-6e5ea7a45ca5" />
+
+<img width="1200" height="600" alt="picture_pred_geometric shape type_20260612_102919" src="https://github.com/user-attachments/assets/e21eb447-fd0e-45ca-b3e9-acdaff838cf5" />
+
+<img width="1200" height="600" alt="picture_pred_geometric shape type_20260612_112359" src="https://github.com/user-attachments/assets/c17cf1cc-c542-4b1d-b36b-2f96b2ad9d79" />
+
+
+
+* **自然形状类：**
+
+<img width="1200" height="600" alt="picture_pred_natural shape type_20260612_102924" src="https://github.com/user-attachments/assets/4b7f0cad-7d08-46a1-9970-315816d6c399" />
+<img width="1200" height="600" alt="picture_pred_natural shape type_20260612_112359" src="https://github.com/user-attachments/assets/55deed56-3051-4461-be78-ab94ff9a19bc" />
+<img width="1200" height="600" alt="picture_pred_natural shape type_20260612_102920" src="https://github.com/user-attachments/assets/89fb31a6-3756-4c06-9e0b-7f73cda02803" />
+
+## 核心代码说明
+
+### 动态任务权重机制
+
+为解决多任务学习中任务优化不均衡、收敛速度不一致的问题，本项目设计并实现了**基于验证集准确率的动态任务权重策略**，具体实现如下：
+
+1. **动态权重计算**
+
+   以各任务在验证集上的准确率为依据，对表现较差的任务自动分配更高权重。
+
+   首先通过 `1 - acc` 得到任务难度系数，归一化后作为动态修正项；
+
+   再将基础权重与动态项加权融合，得到最终任务权重：
+
+   task_weight=0.7×base_weight+0.3×inv_acc
+
+   其中 `base_weight` 初始化为 `[0.25, 0.25, 0.25, 0.25]`，保证训练初期稳定。
+
+2. **训练控制策略**
+
+   - **hybrid 混合模式**：采用历史权重与当前权重平滑融合（`0.9×历史 + 0.1×新计算`），使权重更新更平滑、训练更稳定，避免权重剧烈波动。
+
+该机制能够在训练过程中**自动聚焦困难任务**，使四个分类任务均衡优化，显著提升模型整体收敛稳定性与最终分类精度。核心代码如下：
+
+```python
+# 根据验证准确率动态调整任务权重
+def dynamic_task_weight(val_accs, base_weights=[0.25, 0.25, 0.25, 0.25]):
+    # 表现差的任务分配更高权重
+    inv_accs = [1 - acc for acc in val_accs]
+    inv_accs = [w / sum(inv_accs) for w in inv_accs]
+    # 混合权重
+    weights = [0.7 * base + 0.3 * inv for base, inv in zip(base_weights, inv_accs)]
+    return weights
+
+# 根据验证准确率动态调整任务权重（从第二个epoch开始）
+        if epoch > 0 and use_dynamic_weights:
+            if weight_adjust_method == 'accuracy':
+                task_weights = dynamic_task_weight(current_val_accs)
+            elif weight_adjust_method == 'hybrid':
+				# acc_weights为动态任务权重，task_weights为包含acc_weights的历史状态，实现平滑过渡
+                acc_weights = dynamic_task_weight(current_val_accs)
+                task_weights = [0.9 * a + 0.1 * s for a, s in zip(task_weights, acc_weights)]
+```
+
+### 数据增强
+
+```python
+# 数据增强
+train_transform = transforms.Compose([
+    transforms.Resize((IMAGE_SIZE + 32, IMAGE_SIZE + 32)),  # 先放大到目标尺寸+32
+    transforms.RandomCrop((IMAGE_SIZE, IMAGE_SIZE)),        # 随机裁剪到目标尺寸
+    transforms.RandomHorizontalFlip(p=0.5),                 # 随机水平翻转（50%概率）
+    transforms.RandomVerticalFlip(p=0.2),                   # 随机垂直翻转（20%概率）
+    transforms.RandomRotation(20),                          # 随机旋转±20度
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),  # 颜色抖动
+    transforms.ToTensor(),                                  # 转换为张量
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # 归一化（ImageNet均值/标准差）
+])
+
+val_test_transform = transforms.Compose([
+    transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),            # 直接resize到目标尺寸
+    transforms.ToTensor(),                                  # 转换为张量
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # 归一化
+])
+```
+
+### AdamW优化器+余弦退火
+
+```python
+# 优化器
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY) # AdamW优化器
+scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS) # 余弦退火
+```
 
 
 
