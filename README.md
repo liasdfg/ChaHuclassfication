@@ -8,7 +8,7 @@
 
 - 数据集托管于 Hugging Face Datasets：[AGI-FBHC/ChaHu](https://huggingface.co/datasets/AGI-FBHC/ChaHu)
 
-- 数据集准备工作：将下载的数据集cn-00000-of-00001.parquet，CN-00000-of-00003.parquet，CN-00001-of-00003.parquet，CN-00002-of-00003.parquet三个文件复制到ChaHu目录下。
+- 数据集准备工作：将下载的数据集Cn-00000-of-00001.parquet，CN-00000-of-00003.parquet，CN-00001-of-00003.parquet，CN-00002-of-00003.parquet四个文件复制到ChaHu目录下。
 
 
 ## 数据集结构
@@ -31,20 +31,27 @@
 
 ```bash
 ChaHu/
-├── data_split # 分隔训练集和测试集
-├── image      # readme使用到的一些图片
-├── image_save # 保存的训练结果
-├── model_save # 保存的模型 
-├── process/
-|	├── CN-00000-of-00003-new.parquet # process.py脚本通过mask处理后的文件
-|	├── CN-00001-of-00003-new.parquet
-|	├── CN-00002-of-00003-new.parquet
-├── vis_results   # 保存的测试结果
-├── main.py       # 主训练脚本（多任务SE-ResNet）
-├── process.py    # 数据预处理脚本
-├── README.md
-├── test_model.py #数据集测试脚本
-└── test_pic.py   #图像mask处理图示测试脚本
+├── ChaHu/
+|	├──Cn-00000-of-00001.parquet
+|	├──CN-00000-of-00003.parquet
+|	├── CN-00001-of-00003.parquet
+|	├── CN-00002-of-00003.parquet
+|	├── Cn-00000-of-00001-processed.parquet	# process.py脚本通过mask处理后的文件
+|	├── CN-00000-of-00003-processed.parquet 
+|	├── CN-00001-of-00003-processed.parquet
+|	├── CN-00002-of-00003-processed.parquet
+├── model_save/
+|	├── model_best.pth
+├── save_picture/ 			# 保存model_picture_test.py生成的预测图
+├── label_mapping.pkl 		# 标签映射文件
+├── process.py   			# 数据预处理脚本
+├── main.py      			# 主训练脚本
+├── model_picture_test.py 	# 模型测试脚本
+├── picture_mask_test.py    # 图像mask处理图示测试脚本
+├── multitask_training_curves_20260611_230726.png   # 训练曲线图
+├── picture_mask_test_output.png 					# mask处理后图示
+├── test_dataset.parquet							# main.py生成的测试集文件
+└── README.md
 ```
 ## 模型结构
 
@@ -89,7 +96,7 @@ ChaHu/
 
 ## 训练步骤
 
-1. 运行 `process.py`，通过掩码提取紫砂壶图像有效区域，处理后在 `ChaHu` 目录下生成四个新文件：`cn-00000-of-00001-processed.parquet`、`CN-00000-of-00003-processed.parquet`、`CN-00001-of-00003-processed.parquet`、`CN-00002-of-00003-processed.parquet`。
+1. 运行 `process.py`，通过掩码提取紫砂壶图像有效区域，处理后在 `ChaHu` 目录下生成四个新文件：`Cn-00000-of-00001-processed.parquet`、`CN-00000-of-00003-processed.parquet`、`CN-00001-of-00003-processed.parquet`、`CN-00002-of-00003-processed.parquet`。
 
    * 提取紫砂壶有效区域效果图如下所示
 
