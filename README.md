@@ -58,40 +58,36 @@ ChaHu/
 ## 模型结构
 
 本项目采用多任务图像分类网络，基于**ResNeXt-50 (32×4d)**，结合 **Convolutional Block Attention Module(CBAM)** 和 **full pre-activation**，适用于紫砂壶精细分类任务。
-* **模型结构如下**
+**模型结构如下**
 <img width="1221" height="466" alt="1" src="https://github.com/user-attachments/assets/9206ee5a-f073-474b-aa4b-3abfd7a558c7" />
 <img width="1199" height="763" alt="2" src="https://github.com/user-attachments/assets/e2f43d73-004b-4f12-9399-d113c0f80932" />
 <img width="1297" height="711" alt="3" src="https://github.com/user-attachments/assets/edcfad28-a81c-48a8-9a91-b81e43a14dd8" />
+
+
 ### 1. 基础网络
-* 使用 `torchvision.models.resnet34(pretrained=True)` 作为骨干网络。
-* ResNet 的卷积层划分：
-  - **layer1**：卷积 + BN + ReLU + MaxPool，提取浅层特征，主要负责边缘、纹理和基础形状信息提取，为后续特征聚合提供基础。
-  - **layer2**：ResNet 原 layer1-layer3，提取中层特征，其包含更多语义信息，能够捕捉紫砂壶的细微形态差异，如流把角度、口盖比例。
-  - **layer3**：ResNet 原 layer4，提取深层特征，其具备较大感受野，捕捉整体轮廓和器型信息，增强分类判别力。
+* 使用ResNeXt-50 (32×4d)作为骨干网络。
+* ResNeXt的stage划分：
+  - **layer1**：
+  - **layer2**：
+  - **layer3**：
 
-### 2. SE注意力模块（Squeeze-and-Excitation）
-* 考虑到紫砂壶类间差异微小，主要靠轮廓比例、口盖线条、流把弧度区分，且紫砂泥料质感、窑变色泽、包浆光泽等细节信息分散在不同通道，SE 模块能增强重要通道权重，提高判别能力。
-* 在 `layer2` 和 `layer3` 后分别加入 SE 模块（`SELayer`），用于自动学习通道权重，突出纹理、颜色和轮廓等重要特征，压制背景噪声、反光或划痕等无用特征。
-* 轻量化设计，直接嵌入 ResNet34，不改变主干结构，避免增加过多计算量。
+### 2. CBAM模块（Convolutional Block Attention Module）
+* 考虑到紫砂壶类间差异微小，主要靠轮廓比例、口盖线条、流把弧度区分，且紫砂泥料质感、窑变色泽、包浆光泽等细节信息在通道与空间维度上均需精准捕获，CBAM 模块通过串联通道注意力和空间注意力，能同时增强重要通道权重并聚焦关键空间区域，进一步提升判别能力。
+* 在 stage2 后加入 CBAM 模块，用于自动学习通道和空间维度的注意力权重，突出纹理、颜色和轮廓等重要特征，并强化壶嘴、壶把、口盖等关键部位的空间响应，压制无用特征，提高细粒度特征表达能力。
+* 轻量化设计，可直接嵌入模型，不改变主干结构，且通道与空间注意力计算开销较小，可避免增加过多计算量。
 
-### 3. 全局特征聚合（GeM池化）
-* 相比普通平均池化，GeM 可灵活调节不同空间位置的权重，紫砂壶特征分布不均（纹理、色泽、光泽），GeM 有助于捕捉这些重要区域，提升特征判别力。
-* 使用 **GeM 池化** (`GeM`) 将卷积特征聚合为全局向量。
+### 3. full pre-activation
+* 采用 Full Pre-Activation ，对残差单元进行改进，使梯度传播更加顺畅，提升特征表达能力。
+* 在残差分支中将 BN + ReLU 前置到卷积层之前，形成“归一化 → 激活 → 卷积”的结构，有效缓解梯度消失问题，并增强训练稳定性
+* 通过将激活函数与归一化操作移至残差路径前端，使恒等映射更加纯净，从而提升信息跨层传递效率，减少特征损失
 
-
-### 4. 特征嵌入层
-* 提取的全局特征可以通过嵌入层进一步增强判别力，并加上 BatchNorm 和 Dropout，提升训练稳定性和抗过拟合能力。
-* 全连接嵌入层： Linear → BatchNorm → ReLU → Dropout
-* 输出 512 维特征向量，用于多任务分类
-
-
-### 5. 多任务分类头
+### 4. 多任务分类头
 * 紫砂壶分类任务包含多种属性（如几何形状与自然形态），多任务头共享特征提取层，节省训练资源，同时提升特征泛化能力。
 * 使用 `nn.ModuleDict` 为每个任务生成独立分类头，每个任务的输出维度对应类别数量。
 * 支持同时预测多个任务，如几何形状类型和自然形状类型。
 
 
-### 6. 模型创新点
+### 5. 模型创新点
 
 1. **SE模块增强判别力**：自动放大纹理、色泽、轮廓等重要通道，抑制无效信息。
 2. **GeM池化提高特征聚合能力**：灵活调整空间权重，突出紫砂壶关键特征。
@@ -251,8 +247,6 @@ def dynamic_task_weight(val_accs, base_weights=None):
                 task_weights = [0.9 * w + 0.1 * s for w, s in zip(task_weights, acc_weights)]
 ```
 ### CBAM
-。。。。。
-
 ```python
 # 通道注意力
 class ChannelAttention(nn.Module):
