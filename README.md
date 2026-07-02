@@ -295,7 +295,7 @@ class SpatialAttention(nn.Module):
         return x * scale
 
 
-# CBAM模型
+# CBAM模块
 class CBAM(nn.Module):
     def __init__(self,channels,reduction=16):
         super(CBAM, self).__init__()
@@ -318,7 +318,7 @@ class CBAM(nn.Module):
 - geometric shape type（几何形状）
 - natural shape type（自然形状）
 
-模型共享同一个 ResNet34 主干网络，最终通过多个独立分类头完成预测。其可以提高特征利用率，降低模型参数量，增强模型泛化能力，促进不同任务之间的信息共享。核心代码如下：
+模型共享同一个主干网络，最终通过多个独立分类头完成预测。其可以提高特征利用率，降低模型参数量，增强模型泛化能力，促进不同任务之间的信息共享。核心代码如下：
 
 ```python
         # 多任务分类头
