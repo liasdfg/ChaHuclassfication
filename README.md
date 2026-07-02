@@ -2,7 +2,7 @@
 
 ## 项目简介
 
-本项目是一个用于紫砂壶图像分类深度学习项目。该项目包含**多任务学习模型**：基于**ResNet-34**，结合 **SE注意力模块** 和 **GeM池化**，实现多个不同角度（几何形状、自然形状、花卉类型、把手类型）的紫砂壶分类
+本项目是一个用于紫砂壶图像分类深度学习项目。该项目包含**多任务学习模型**：基于**ResNeXt-50 (32×4d)**，结合 **Convolutional Block Attention Module(CBAM)** 和 **full pre-activation**，实现多个不同角度（几何形状、自然形状、花卉类型、把手类型）的紫砂壶分类
 
 ## 数据集说明
 
@@ -46,19 +46,22 @@ ChaHu/
 ├── label_mapping.pkl 		# 标签映射文件
 ├── process.py   			# 数据预处理脚本
 ├── main.py      			# 主训练脚本
+├── model.py                # 模型文件
+├── resnext50_cbam.onnx     # 模型onnx
 ├── model_picture_test.py 	# 模型测试脚本
 ├── picture_mask_test.py    # 图像mask处理图示测试脚本
-├── multitask_training_curves_20260611_230726.png   # 训练曲线图
+├── multitask_training_curves_20260701_220152.png   # 训练曲线图
 ├── picture_mask_test_output.png 					# mask处理后图示
 ├── test_dataset.parquet							# main.py生成的测试集文件
 └── README.md
 ```
 ## 模型结构
 
-本项目采用多任务图像分类网络，基于 **ResNet34**，结合 **SE注意力模块** 和 **GeM池化**，适用于紫砂壶精细分类任务。
-* **模型整体结构如下**
-<img width="1387" height="596" alt="tu" src="https://github.com/user-attachments/assets/4d6120a8-736a-4561-b002-ec3d7a3da0bc" />
-
+本项目采用多任务图像分类网络，基于**ResNeXt-50 (32×4d)**，结合 **Convolutional Block Attention Module(CBAM)** 和 **full pre-activation**，适用于紫砂壶精细分类任务。
+* **模型结构如下**
+<img width="1221" height="466" alt="1" src="https://github.com/user-attachments/assets/9206ee5a-f073-474b-aa4b-3abfd7a558c7" />
+<img width="1199" height="763" alt="2" src="https://github.com/user-attachments/assets/e2f43d73-004b-4f12-9399-d113c0f80932" />
+<img width="1297" height="711" alt="3" src="https://github.com/user-attachments/assets/edcfad28-a81c-48a8-9a91-b81e43a14dd8" />
 ### 1. 基础网络
 * 使用 `torchvision.models.resnet34(pretrained=True)` 作为骨干网络。
 * ResNet 的卷积层划分：
@@ -99,17 +102,21 @@ ChaHu/
 ## 训练步骤
 
 1. 运行 `process.py`，通过掩码提取紫砂壶图像有效区域，处理后在 `ChaHu` 目录下生成四个新文件：`Cn-00000-of-00001-processed.parquet`、`CN-00000-of-00003-processed.parquet`、`CN-00001-of-00003-processed.parquet`、`CN-00002-of-00003-processed.parquet`。
+### 参数配置：
+| 参数          | 默认值 | 描述           |
+| ------------- | ------ | -------------- |
+| dir    | 'ChaHu'    | 数据集所在文件夹       |
 
    * 提取紫砂壶有效区域效果图如下所示
 
- <img width="3569" height="3648" alt="picture_mask" src="https://github.com/user-attachments/assets/02567355-73e0-4e29-a2c3-16acee711ab6" />
+<img width="3542" height="3627" alt="4" src="https://github.com/user-attachments/assets/8a608f53-9b79-44de-95d8-2b09ffbddb34" />
 
 
 2. 运行 `main.py`，完成**数据集划分、模型构建、多任务训练**全部流程：
 
 - 对处理后的数据集按照 **76% 训练集、14% 验证集、10% 测试集** 进行划分，以几何形状类型geometric shape为依据执行**分层抽样**，确保各子集类别分布与原始数据集保持一致；
 
-- 基于 **ResNet34**，结合 **SE注意力模块** 和 **GeM池化**，构建紫砂壶多任务分类模型，**可依据任务列表同时完成多个分类任务**：几何形状、自然形状、花卉类型、把手类型；
+- 基于**ResNeXt-50 (32×4d)**，结合 **Convolutional Block Attention Module(CBAM)** 和 **full pre-activation**，构建紫砂壶多任务分类模型，**可依据任务列表同时完成多个分类任务**：几何形状、自然形状、花卉类型、把手类型；
 
   项目支持四个并行分类任务：
 
@@ -122,63 +129,83 @@ ChaHu/
 
 * 采用**动态任务权重策略**，根据各任务在验证集上的准确率自动调整训练优先级，实现多任务协同优化。
 
-### 训练参数配置（可在脚本中修改）：
+### 训练参数配置：
 
 | 参数          | 默认值 | 描述           |
 | ------------- | ------ | -------------- |
-| IMAGE_SIZE    | 224    | 图像尺寸       |
-| BATCH_SIZE    | 64     | 批次大小       |
-| TASK_NAME_LIST | ['geometric shape type', 'natural shape type']   | 任务列表     |
-| LEARNING_RATE | 3e-4   | 学习率         |
-| WEIGHT_DECAY   | 1e-4    | 权重衰减       |
-| NUM_EPOCHS    | 50     | 训练轮数       |
-| TEST_SIZE     | 0.1   | 测试集比例     |
+| processed_dir    | "ChaHu"  | 处理后数据集所在文件夹 |
+|  num_workers   | min(4, os.cpu_count())  |  工作进程数   |
+|  image_size   | 224  |   图像尺寸  |
+|  batch_size   | 32  |   批次大小  |
+|  device   | 'cuda' if torch.cuda.is_available() else 'cpu'  |   使用设备  |
+|  task_name_list   |  ['geometric shape type', 'natural shape type'] |  任务列表   |
+|   learning_rate  |  0.1 |  学习率   |
+|   momentum  |  0.9 |  动量   |
+|   weight_decay  |  0.0001 |  权重衰减   |
+| num_epochs    | 150  |   训练轮数  |
+|  test_size   | 0.1  |  测试集比例   |
+|  base_task_weights   |  None |  任务权重   |
+|  weight_adjust_method   | 'hybrid'  |  权重调整方法   |
 
 
 ​	3. 运行model_picture_test.py，测试模型效果，输出分类概率柱状图。
+
+### 参数配置：
+| 参数          | 默认值 | 描述           |
+| ------------- | ------ | -------------- |
+| image_num | 10   |  测试样本数量   |
+| dir |  '.'  |   测试数据集所在文件夹  |
+| pkl_name |  label_mapping.pkl  | pkl文件名称    |
+| dir_path |  '.'  |  pkl文件所在文件夹   |
+| image_size |  224  |   图像尺寸  |
+| device |  'cuda' if torch.cuda.is_available() else 'cpu'  |  使用设备   |
+| task_name_list |  ['geometric shape type', 'natural shape type']  |  任务列表   |
 
 ### 模型输出
 
 训练完成后会生成：
 
 - `model_save/model_best.pth` - 最佳验证准确率模型
-- `multitask_training_curves_20260611_230726.png` - 训练曲线图
+- `multitask_training_curves_20260701_220152.png` - 训练曲线图
 
 ## 实验结果 
 
 * **训练效果如下所示**
 
-<img width="871" height="168" alt="运行截图1" src="https://github.com/user-attachments/assets/aa80afa1-6999-42e6-81d1-fe251ff757ab" />
+<img width="727" height="166" alt="运行截图1" src="https://github.com/user-attachments/assets/12f4fb14-b1b0-475f-b9ef-5c46866594a3" />
 
-<img width="1600" height="800" alt="multitask_training_curves_20260611_230726" src="https://github.com/user-attachments/assets/532a9c35-e40c-4424-b536-a3d15344329b" />
+<img width="1600" height="800" alt="multitask_training_curves_20260701_220152" src="https://github.com/user-attachments/assets/6c71d2ad-d094-4d6a-a6d3-cb38bc54f2a4" />
 
 * **测试结果**
 
   | 紫砂壶分类头 | 任务准确率 |
   | ------------ | ---------- |
-  | **几何形状** | **0.6774**  |
-  | **自然形状** | **0.9077**  |
+  | **几何形状** | **0.5754**  |
+  | **自然形状** | **0.8590**  |
 
-  由于**几何形状**分类头包含紫砂壶壶型最多，包含有30多个类，且对于一些相似形状茶壶较难分辨，所以任务准确率最低，而**自然形状**只有8个左右，所以准确率高很多。
+  由于**几何形状**分类头包含紫砂壶壶型最多，包含有30多个类，且对于一些相似形状茶壶较难分辨，所以任务准确率较低，而**自然形状**只有8个左右，所以准确率高很多。
 
 * 下面是抽取的紫砂壶的各类别概率分布
 * **几何形状类：**
 
 
+<img width="1200" height="600" alt="picture_pred_geometric shape type_20260702_170131" src="https://github.com/user-attachments/assets/89b2b8ab-116e-4818-9406-e33946e8d501" />
 
-<img width="1200" height="600" alt="picture_pred_geometric shape type_20260612_102912" src="https://github.com/user-attachments/assets/4570fd26-fadc-41d3-b8d1-6e5ea7a45ca5" />
 
-<img width="1200" height="600" alt="picture_pred_geometric shape type_20260612_102919" src="https://github.com/user-attachments/assets/e21eb447-fd0e-45ca-b3e9-acdaff838cf5" />
+<img width="1200" height="600" alt="picture_pred_geometric shape type_20260702_170118" src="https://github.com/user-attachments/assets/a22b4fd6-810b-4fea-b7a9-1cde11119e11" />
 
-<img width="1200" height="600" alt="picture_pred_geometric shape type_20260612_112359" src="https://github.com/user-attachments/assets/c17cf1cc-c542-4b1d-b36b-2f96b2ad9d79" />
+
+<img width="1200" height="600" alt="picture_pred_geometric shape type_20260702_170138" src="https://github.com/user-attachments/assets/8970d5a2-f1c2-4aef-9654-296c655e97ac" />
+
 
 
 
 * **自然形状类：**
 
-<img width="1200" height="600" alt="picture_pred_natural shape type_20260612_102924" src="https://github.com/user-attachments/assets/4b7f0cad-7d08-46a1-9970-315816d6c399" />
-<img width="1200" height="600" alt="picture_pred_natural shape type_20260612_112359" src="https://github.com/user-attachments/assets/55deed56-3051-4461-be78-ab94ff9a19bc" />
-<img width="1200" height="600" alt="picture_pred_natural shape type_20260612_102920" src="https://github.com/user-attachments/assets/89fb31a6-3756-4c06-9e0b-7f73cda02803" />
+<img width="1200" height="600" alt="picture_pred_natural shape type_20260702_170153" src="https://github.com/user-attachments/assets/a36b7be1-c88d-487d-b0cf-fd495a94da37" />
+<img width="1200" height="600" alt="picture_pred_natural shape type_20260702_170205" src="https://github.com/user-attachments/assets/5adb2111-3259-48c6-9e43-22fa66b64e4a" />
+<img width="1200" height="600" alt="picture_pred_natural shape type_20260702_170142" src="https://github.com/user-attachments/assets/c2a8e6fa-8062-4923-832e-081c160093b7" />
+
 
 ## 核心代码说明
 
@@ -194,9 +221,9 @@ ChaHu/
 
    再将基础权重与动态项加权融合，得到最终任务权重：
 
-   task_weight=0.7×base_weight+0.3×inv_acc
+   task_weights=0.7×base_weights+0.3×weight_err
 
-   其中 `base_weight` 初始化为 `[0.25, 0.25, 0.25, 0.25]`，保证训练初期稳定。
+   其中 `base_weights` 初始化为 `[0.5, 0.5]`，保证训练初期稳定。
 
 2. **训练控制策略**
 
@@ -205,71 +232,83 @@ ChaHu/
 该机制能够在训练过程中**自动聚焦困难任务**，使四个分类任务均衡优化，显著提升模型整体收敛稳定性与最终分类精度。核心代码如下：
 
 ```python
-# 根据验证准确率动态调整任务权重
-def dynamic_task_weight(val_accs, base_weights=[0.25, 0.25, 0.25, 0.25]):
-    # 表现差的任务分配更高权重
-    inv_accs = [1 - acc for acc in val_accs]
-    inv_accs = [w / sum(inv_accs) for w in inv_accs]
-    # 混合权重
-    weights = [0.7 * base + 0.3 * inv for base, inv in zip(base_weights, inv_accs)]
+# 用于动态调整任务权重
+def dynamic_task_weight(val_accs, base_weights=None):
+    if base_weights is None:                                 # 初始化任务权重
+        base_weights = [1.0 / len(val_accs)] * len(val_accs)
+    val_err = [1 - acc for acc in val_accs]                  # 计算错误率
+    weight_err = [w / sum(val_err) for w in val_err]         # 计算错误率占总错误比例(归一化)
+    weights = [0.7 * base + 0.3 * err for base, err in zip(base_weights, weight_err)]  # 计算权重
     return weights
 
-# 根据验证准确率动态调整任务权重（从第二个epoch开始）
-        if epoch > 0 and use_dynamic_weights:
-            if weight_adjust_method == 'accuracy':
-                task_weights = dynamic_task_weight(current_val_accs)
-            elif weight_adjust_method == 'hybrid':
-				# acc_weights为动态任务权重，task_weights为包含acc_weights的历史状态，实现平滑过渡
-                acc_weights = dynamic_task_weight(current_val_accs)
-                task_weights = [0.9 * a + 0.1 * s for a, s in zip(task_weights, acc_weights)]
-```
-### SE注意力机制
 
-为增强模型对紫砂壶细粒度特征的感知能力，本项目在 ResNet34 的中深层特征提取阶段引入 **SE（Squeeze-and-Excitation）注意力模块**。
-可实现强化关键纹理与轮廓特征、抑制背景和噪声信息、提高模型判别能力。核心代码如下：
+# 根据验证准确率动态调整任务权重（从第二个epoch开始）
+      if epoch > 0 and use_dynamic_weights:  # 动态权重调整
+            if weight_adjust_method == 'accuracy':  # 直接使用函数计算的权重
+                task_weights = dynamic_task_weight(current_val_accs, base_task_weights)
+            elif weight_adjust_method == 'hybrid':  # 结合上一次的权重来计算新权重
+                acc_weights = dynamic_task_weight(current_val_accs, base_task_weights)
+                task_weights = [0.9 * w + 0.1 * s for w, s in zip(task_weights, acc_weights)]
+```
+### CBAM
+。。。。。
 
 ```python
-class SELayer(nn.Module):
-    def __init__(self, channel, reduction=16):
-        super(SELayer, self).__init__()
-
+# 通道注意力
+class ChannelAttention(nn.Module):
+    def __init__(self,channels,reduction=16):
+        super(ChannelAttention, self).__init__()
+        self.channels = channels    # 输入通道数
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
-
-        self.fc = nn.Sequential(
-            nn.Linear(channel, channel // reduction, bias=False),
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        self.shared_mlp = nn.Sequential(
+            nn.Linear(channels, channels//reduction),
             nn.ReLU(inplace=True),
-            nn.Linear(channel // reduction, channel, bias=False),
-            nn.Sigmoid()
+            nn.Linear(channels//reduction,channels)
         )
 
-    def forward(self, x):
-        b, c, _, _ = x.size()
+    def forward(self,x):
+        x_avg = self.avg_pool(x)
+        x_max = self.max_pool(x)
+        avg_pool = x_avg.view(x_avg.size(0), -1)
+        max_pool = x_max.view(x_max.size(0), -1)
+        channel_att_avg = self.shared_mlp(avg_pool)
+        channel_att_max = self.shared_mlp(max_pool)
+        channel_att_sum = channel_att_avg + channel_att_max
+        scale = torch.sigmoid(channel_att_sum).unsqueeze(2).unsqueeze(3).expand_as(x)
+        return x * scale
 
-        y = self.avg_pool(x).view(b, c)
-        y = self.fc(y).view(b, c, 1, 1)
 
-        return x * y.expand_as(x)
+# 空间注意力
+class SpatialAttention(nn.Module):
+    def __init__(self):
+        super(SpatialAttention, self).__init__()
+        self.conv = nn.Conv2d(2, 1, kernel_size=7,
+                              stride=1, padding=3, dilation=1, groups=1, bias=False)
+        self.bn = nn.BatchNorm2d(1, eps=1e-5, momentum=0.01, affine=True)
+
+    def forward(self,x):
+        x_compress = torch.cat((torch.max(x,1)[0].unsqueeze(1), torch.mean(x,1).unsqueeze(1)), dim=1)
+        x_out = self.conv(x_compress)
+        x_out = self.bn(x_out)
+        scale = torch.sigmoid(x_out)
+        return x * scale
+
+
+# CBAM模型
+class CBAM(nn.Module):
+    def __init__(self,channels,reduction=16):
+        super(CBAM, self).__init__()
+        self.channel_attention = ChannelAttention(channels, reduction)
+        self.spatial_attention = SpatialAttention()
+
+    def forward(self,x):
+        x = self.channel_attention(x)
+        x = self.spatial_attention(x)
+        return x
 ```
 
-### GeM池化
 
-传统 ResNet 使用全局平均池化（Global Average Pooling）进行特征聚合，但平均池化会平等对待所有空间位置的信息。
-因此本项目采用 **GeM池化（Generalized Mean Pooling）**，GeM通过引入可学习参数 p，能够自动学习最适合当前任务的特征聚合方式。核心代码如下：
-
-```python
-class GeM(nn.Module):
-    def __init__(self, p=3.0, eps=1e-6):
-        super().__init__()
-
-        self.p = nn.Parameter(torch.ones(1) * p)
-        self.eps = eps
-
-    def forward(self, x):
-        return F.avg_pool2d(
-            x.clamp(min=self.eps).pow(self.p),
-            kernel_size=(x.size(-2), x.size(-1))
-        ).pow(1.0 / self.p)
-```
 ### 多任务分类结构
 
 为充分利用不同分类任务之间的相关性，本项目采用 **共享特征提取 + 独立分类头** 的多任务学习结构。
@@ -282,21 +321,21 @@ class GeM(nn.Module):
 模型共享同一个 ResNet34 主干网络，最终通过多个独立分类头完成预测。其可以提高特征利用率，降低模型参数量，增强模型泛化能力，促进不同任务之间的信息共享。核心代码如下：
 
 ```python
-self.heads = nn.ModuleDict()
-
-for type_name, num in type_len_list.items():
-    self.heads[type_name] = nn.Linear(512, num)
+        # 多任务分类头
+        self.heads = nn.ModuleDict()
+        for type_name, num in type_len_list.items():
+            self.heads[type_name] = nn.Linear(1000, num)
 ```
 
 ```python
-outputs = []
+        outputs = []
+        # 按任务列表计算每个任务的输出
+        for type_name in self.type_len_list.keys():
+            outputs.append(
+                self.heads[type_name](x)
+            )
+        return tuple(outputs)
 
-for type_name in self.type_len_list.keys():
-    outputs.append(
-        self.heads[type_name](x)
-    )
-
-return tuple(outputs)
 ```
 
 ### 数据增强
@@ -321,82 +360,24 @@ val_test_transform = transforms.Compose([
 ])
 ```
 
-### AdamW优化器+余弦退火
+### SGD（动量 + L2正则） + StepLR阶梯式学习率衰减
 
 ```python
-# 优化器
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY) # AdamW优化器
-scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS) # 余弦退火
+    criterion = nn.CrossEntropyLoss()     # 构建损失函数
+    optimizer = optim.SGD(model.parameters(),lr=args.learning_rate,momentum=args.momentum,
+                          weight_decay=args.weight_decay)   # 定义优化器
+    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)  # 定义调度器
+
 ```
 ## 借助大模型实现的代码说明
 ### picture_mask_test.py
-原图裁剪代码
-```python
-# 裁剪原图,增加细节
-    nonzero = np.argwhere(mask_np > 0)
-    if len(nonzero) > 0:
-        y_min, x_min = nonzero.min(axis=0)
-        y_max, x_max = nonzero.max(axis=0)
-        h, w = mask_np.shape
-        y_min = max(0, y_min - 15)
-        x_min = max(0, x_min - 15)
-        y_max = min(h, y_max + 15)
-        x_max = min(w, x_max + 15)
-        image_np = image_np[y_min:y_max, x_min:x_max]
-        mask_np = mask_np[y_min:y_max, x_min:x_max]
-```
+无
 ### process.py
-原图裁剪代码
-```python
-nonzero = np.argwhere(mask_np > 0)
-    if len(nonzero) > 0:
-        y_min, x_min = nonzero.min(axis=0)
-        y_max, x_max = nonzero.max(axis=0)
-        h, w = mask_np.shape
-        y_min = max(0, y_min - 15)
-        x_min = max(0, x_min - 15)
-        y_max = min(h, y_max + 15)
-        x_max = min(w, x_max + 15)
-        image_np = image_np[y_min:y_max, x_min:x_max]
-        mask_np = mask_np[y_min:y_max, x_min:x_max]
-```
+无
+### model.py
+无
 ### main.py
-GeM
-```python
-class GeM(nn.Module):
-    def __init__(self, p=3.0, eps=1e-6):
-        super().__init__()
-        self.p = nn.Parameter(torch.ones(1) * p)
-        self.eps = eps
-    def forward(self, x):
-        return F.avg_pool2d(x.clamp(min=self.eps).pow(self.p),
-                            kernel_size=(x.size(-2), x.size(-1))).pow(1.0 / self.p)
-
-```
-损失函数构建
-
-```python
-    criterions = {}
-    for task in tasks:
-        if class_weights is not None and task in class_weights:
-            weight_tensor = torch.tensor(class_weights[task], dtype=torch.float32).to(DEVICE)
-            criterions[task] = nn.CrossEntropyLoss(weight=weight_tensor)
-        else:
-            criterions[task] = criterion
-
-```
+无
 ### model_picture_test.py
-GeM
-```python
-class GeM(nn.Module):
-    def __init__(self, p=3.0, eps=1e-6):
-        super().__init__()
-        self.p = nn.Parameter(torch.ones(1) * p)
-        self.eps = eps
-    def forward(self, x):
-        return F.avg_pool2d(x.clamp(min=self.eps).pow(self.p),
-                            kernel_size=(x.size(-2), x.size(-1))).pow(1.0 / self.p)
-```
-
+无
 
