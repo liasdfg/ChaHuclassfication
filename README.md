@@ -47,7 +47,6 @@ ChaHu/
 ├── process.py   			# 数据预处理脚本
 ├── main.py      			# 主训练脚本
 ├── model.py                # 模型文件
-├── resnext50_cbam.onnx     # 模型onnx
 ├── model_picture_test.py 	# 模型测试脚本
 ├── picture_mask_test.py    # 图像mask处理图示测试脚本
 ├── multitask_training_curves_20260701_220152.png   # 训练曲线图
